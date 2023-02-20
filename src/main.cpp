@@ -196,11 +196,12 @@ inline int MainLoop() {
     ::ID3D11InputLayout* input_layout{};
     // clang-format off
     ::D3D11_INPUT_ELEMENT_DESC desc[] {
-        {"POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+        {"POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        {"COL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 3*sizeof(f32), D3D11_INPUT_PER_VERTEX_DATA, 0 }
     };
     // clang format on
     res = device->CreateInputLayout(
-        desc, 1, vs_bytecode, vs_bytecode_size, &input_layout);
+        desc, 2, vs_bytecode, vs_bytecode_size, &input_layout);
     if (res != S_OK) {
         return 1;
     }
@@ -208,13 +209,17 @@ inline int MainLoop() {
     // 4. Creating vertex buffer
     // clang-format off
     f32 vertex_data[] {
-        0.0f, 0.5f, 0.0f,
-        0.5f, -0.5f, 0.0f,
-        -0.5f, -0.5f, 0.0f
+        -0.5f, 0.5f, 0.0f,  0.1f, 0.0f, 0.5f,
+        0.0f, 0.5f, 0.0f,   0.5f, 0.0f, 0.1f,
+        0.0f, 0.0f, 0.0f,   0.0f, 0.2,  0.0f,
+
+        -0.5f, 0.0f, 0.0f, 0.1f, 0.0f, 0.5f,
+        -0.5f, 0.5f, 0.0f, 0.5f, 0.0f, 0.1f,
+        0.0f, 0.0f, 0.0f,  0.0f, 0.2,  0.0f
     };
-    u32 stride = 3 * sizeof(f32);
+    u32 stride = 6 * sizeof(f32);
     u32 offset = 0;
-    u32 vcount = 3;
+    u32 vcount = 6;
     // clang-format on
 
     ::ID3D11Buffer* vertex_buffer{};
