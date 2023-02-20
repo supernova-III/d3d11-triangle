@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.20)
+project(d3d11_triangle LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+
+set(CMAKE_CONFIGURATION_TYPES "Debug;Release;DevOptimized")
+
+if (WIN32)
+  if (MSVC)
+    set(CMAKE_CXX_FLAGS "-nologo -Gm- -GR- -EHa- -GS- -Gs9999999" CACHE STRING "" FORCE)
+    set(CMAKE_CXX_FLAGS_DEBUG "-Od -Zi" CACHE STRING "" FORCE)
+    set(CMAKE_CXX_FLAGS_RELEASE "-Oi" CACHE STRING "" FORCE)
+    set(CMAKE_CXX_FLAGS_DEVOPTIMIZED "${CMAKE_CXX_FLAGS_RELEASE} -FAs" CACHE STRING "" FORCE)
+    set(CMAKE_EXE_LINKER_FLAGS "-nodefaultlib" CACHE STRING "" FORCE)
+    set(CMAKE_EXE_LINKER_FLAGS_DEVOPTIMIZED ${CMAKE_EXE_LINKER_FLAGS} CACHE STRING "" FORCE)
+  endif()
+endif()
+
+
+add_subdirectory(src)
