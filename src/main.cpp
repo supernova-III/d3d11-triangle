@@ -4,6 +4,7 @@
 
 #include <d3d11.h>
 #include <d3d10.h>
+#include <dxgi1_2.h>
 
 extern "C" int _fltused = 0;
 
@@ -23,6 +24,12 @@ enum bool32 : uint32_t {
     False,
     True
 };
+
+static ::ID3D11Device* device{};
+static ::ID3D11DeviceContext* device_context{};
+static ::IDXGISwapChain1* swapchain{};
+static ::ID3D11RenderTargetView* render_target_view{};
+static ::IDXGIFactory2* factory{};
 
 static struct {
     ::HINSTANCE hinstance;
@@ -46,6 +53,26 @@ void ConsoleWrite(const char* str) {
 namespace {
 
 ::LRESULT wndProc(::HWND window, ::UINT msg, ::WPARAM wparam, ::LPARAM lparam) {
+    switch (msg) {
+        case WM_SIZE: {
+            if (!swapchain) break;
+            // render target should be released before resizing
+            // swapchain buffers
+            render_target_view->Release();
+
+            swapchain->ResizeBuffers(
+                0, LOWORD(lparam), HIWORD(lparam), DXGI_FORMAT_UNKNOWN, 0);
+
+            // now render target should be recreated
+            ::ID3D11Texture2D* framebuffer{};
+            swapchain->GetBuffer(
+                0, __uuidof(::ID3D11Texture2D), (void**)&framebuffer);
+
+            device->CreateRenderTargetView(
+                framebuffer, nullptr, &render_target_view);
+            framebuffer->Release();
+        } break;
+    }
     return ::DefWindowProcA(window, msg, wparam, lparam);
 }
 
@@ -82,38 +109,49 @@ inline int MainLoop() {
         return 1;
     }
 
-    ::ID3D11Device* device{};
-    ::ID3D11DeviceContext* device_context{};
-    ::IDXGISwapChain* swapchain{};
-    ::ID3D11RenderTargetView* render_target_view{};
-
     // 1. Creating device, device context, and swapchain
-    ::DXGI_SWAP_CHAIN_DESC scd{};
-    scd.BufferCount = 2;
-    scd.Windowed = true;
-    scd.OutputWindow = platform_data.window;
-    scd.SampleDesc.Count = 1;
-    scd.SampleDesc.Quality = 0;
-    scd.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    scd.BufferDesc.RefreshRate.Numerator = 0;
-    scd.BufferDesc.RefreshRate.Denominator = 1;
-    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    scd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
     ::UINT flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
 #ifndef NDEBUG
     flags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
     ::D3D_FEATURE_LEVEL feature_level{};
-    auto res = ::D3D11CreateDeviceAndSwapChain(nullptr,
-        D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, nullptr, 0, D3D11_SDK_VERSION,
-        &scd, &swapchain, &device, &feature_level, &device_context);
+    // Creating device + immediate context
+    auto res = ::D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+        flags, nullptr, 0, D3D11_SDK_VERSION, &device, &feature_level,
+        &device_context);
 
     if (res != S_OK) {
         return 1;
     }
 
-    if (!swapchain || !device || !device_context) {
+    if (!device || !device_context) {
+        return 1;
+    }
+
+    // Creating the swapchain
+    ::DXGI_SWAP_CHAIN_DESC1 scd{};
+    scd.BufferCount = 1;
+    scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    scd.SampleDesc.Count = 1;
+    scd.SampleDesc.Quality = 0;
+    scd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+
+    res = ::CreateDXGIFactory(__uuidof(::IDXGIFactory2), (void**)&factory);
+
+    if (res != S_OK) {
+        return 1;
+    }
+
+    res = factory->CreateSwapChainForHwnd(
+        device, platform_data.window, &scd, nullptr, nullptr, &swapchain);
+
+    if (res != S_OK) {
+        return 1;
+    }
+
+    if (!swapchain) {
         return 1;
     }
 
@@ -244,6 +282,11 @@ inline int MainLoop() {
             DispatchMessage(&msg);
         }
 
+        // handle resize fail
+        if (!render_target_view || !swapchain) {
+            break;
+        }
+
         device_context->ClearRenderTargetView(render_target_view, color);
 
         ::RECT rect{};
@@ -252,8 +295,6 @@ inline int MainLoop() {
             (::FLOAT)(rect.right - rect.left),
             (::FLOAT)(rect.bottom - rect.top), 0.0f, 1.0f};
 
-        // Rasterization
-        device_context->RSSetViewports(1, &viewport);
         // Input assembly
         device_context->IASetPrimitiveTopology(
             D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -263,6 +304,9 @@ inline int MainLoop() {
 
         // Vertex shader
         device_context->VSSetShader(vertex_shader, nullptr, 0);
+
+        // Rasterization
+        device_context->RSSetViewports(1, &viewport);
 
         // Pixel shader
         device_context->PSSetShader(pixel_shader, nullptr, 0);
